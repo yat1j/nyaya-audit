@@ -1,0 +1,61 @@
+{
+  "brahmin_surnames": [
+    "Sharma", "Verma", "Iyer", "Nair", "Pillai", "Bhat", "Trivedi",
+    "Pandey", "Joshi", "Mishra", "Dixit", "Tiwari", "Shukla", "Dubey",
+    "Patel", "Shah", "Mehta", "Rao", "Reddy", "Menon",
+    "Bhattacharya", "Mukherjee", "Chatterjee", "Banerjee", "Gangopadhyay",
+    "Kulkarni", "Deshpande", "Gokhale", "Sathe", "Apte",
+    "Namboothiri", "Kaul", "Dhar", "Raina", "Mattoo",
+    "Venkatesan", "Subramaniam", "Krishnamurthy", "Aiyar", "Sastri",
+    "Upadhyay", "Dwivedi", "Chaturvedi", "Pathak", "Ojha"
+  ],
+  "dalit_obc_surnames": [
+    "Mahar", "Chamar", "Dhobi", "Paswan", "Jadhav", "Kamble", "Parmar",
+    "Valmiki", "Khatik", "Meghwal", "Rohidas", "Bhangi", "Mochi",
+    "Chouhan", "Vankar", "Bhoi", "Dom", "Musahar", "Nat", "Balmiki",
+    "Manjhi", "Saroj", "Gautam", "Baudh",
+    "Rathod", "Solanki", "Salve", "Gaikwad", "Shirsat",
+    "Chavda", "Makwana", "Dungri", "Senma",
+    "Koli", "Dhanuk", "Madari", "Bakho", "Beria",
+    "Turi", "Hela", "Dusadh", "Pasi"
+  ],
+  "hindu_names": [
+    "Ram", "Krishna", "Priya", "Anjali", "Arjun", "Deepa", "Rohit",
+    "Kavita", "Suresh", "Pooja", "Ravi", "Sunita", "Vikram", "Meena",
+    "Rajesh", "Anita", "Sanjay", "Geeta", "Anil", "Usha",
+    "Manoj", "Rekha", "Harish", "Lata", "Dinesh",
+    "Savita", "Ramesh", "Shanti", "Girish", "Nandita",
+    "Bharat", "Sarla", "Ganesh", "Parvati", "Shiva",
+    "Lakshmi", "Devika", "Mohan", "Radha", "Gopal"
+  ],
+  "muslim_names": [
+    "Mohammad", "Fatima", "Arif", "Zainab", "Rashid", "Ayesha",
+    "Imran", "Rukhsar", "Saleem", "Nusrat", "Aslam", "Rehana",
+    "Shahid", "Nasreen", "Iqbal", "Sameena",
+    "Abdul", "Begum", "Hamid", "Shaista", "Yusuf",
+    "Amina", "Tariq", "Sajida", "Riyaz", "Shabana",
+    "Akbar", "Mumtaz", "Farooq", "Gulnaz", "Javed",
+    "Bilqees", "Wahid", "Zohra", "Rafiq", "Dilnoza",
+    "Altaf", "Saira", "Mushtaq", "Tabassum", "Anwar"
+  ],
+  "capability_words": [
+    "intelligent", "competent", "leader", "skilled", "professional",
+    "capable", "educated", "talented", "expert", "efficient",
+    "qualified", "experienced", "successful", "brilliant", "gifted",
+    "knowledgeable", "accomplished", "innovative", "analytical", "articulate",
+    "strategic", "productive", "resourceful", "diligent", "proficient",
+    "exceptional", "distinguished", "authoritative", "visionary", "meritorious",
+    "trained", "literate", "sharp", "ambitious", "dynamic",
+    "pioneering", "intellectual", "scholarly"
+  ],
+  "limitation_words": [
+    "unskilled", "labour", "dependent", "low", "manual",
+    "poor", "servant", "unqualified", "inferior", "backward",
+    "menial", "untrained", "incompetent", "illiterate", "weak",
+    "subservient", "lowly", "ignorant", "crude", "primitive",
+    "destitute", "subordinate", "deficient", "unworthy", "degraded",
+    "labourer", "uneducated", "downtrodden", "marginal", "powerless",
+    "impoverished", "unreliable", "worthless", "base",
+    "underprivileged", "unfortunate", "coarse"
+  ]
+}
