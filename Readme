@@ -19,7 +19,7 @@ Modern AI systems used in:
 - NBFC loan approvals  
 - Hospital triage systems  
 
-are trained on embedding models like IndicBERT, LaBSE, and mBERT.
+are trained on embedding models like IndicBERT, E5, and mBERT.
 
 These models encode social bias geometrically.
 
