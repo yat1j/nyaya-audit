@@ -1,1 +1,140 @@
+#Nyaya — AI Fairness Infrastructure for India
+
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
+![Flutter](https://img.shields.io/badge/Flutter-Frontend-blue)
+![Google Cloud](https://img.shields.io/badge/Google%20Cloud-GCP-orange)
+
+---
+
+#One-Line Description
+Nyaya is an AI fairness SDK and cloud platform that detects and removes hidden caste and religion bias from machine learning models used in India.
+
+---
+
+#The Problem
+
+Modern AI systems used in:
+- Hiring platforms  
+- NBFC loan approvals  
+- Hospital triage systems  
+
+are trained on embedding models like IndicBERT, E5, and mBERT.
+
+These models encode social bias geometrically.
+
+Example:
+- Names like Sharma are closer to “intelligent”
+- Names like Paswan are closer to “unskilled”
+
+Even if developers never write biased rules, the model still behaves unfairly.
+
+#Evidence
+- IndiBias (NAACL 2024) → Indian language models show caste bias  
+- DeCaste (2025) → Bias persists across datasets  
+- Nature (Jan 2026) → Structural bias in multilingual embeddings  
+
+
+#Why Existing Tools Fail
+
+Current fairness tools:
+- Require explicit protected labels (not available in India)
+- Do NOT support caste proxies like surnames
+- Cannot detect embedding-level bias
+
+Result: Bias remains invisible.
+
+
+
+#Our Solution — Nyaya
+
+Nyaya solves this using research-backed methods:
+
+1. SEAT (Bias Detection)
+Measures bias using sentence templates and similarity.
+
+2. Hard Debiasing
+Removes bias direction mathematically using PCA projection.
+
+3. Retroactive Audit
+Re-evaluates past decisions to detect unfair outcomes.
+
+
+#Architecture
+
+| Component        | Technology |
+|-----------------|-----------|
+| Backend API     | FastAPI + Cloud Run |
+| Frontend        | Flutter |
+| Storage         | Firebase Storage |
+| Database        | Firestore + BigQuery |
+| Trigger System  | Cloud Functions |
+| AI Explanation  | Gemini 1.5 Flash |
+
+
+#API Endpoints
+
+#POST /audit
+Upload dataset and get bias metrics
+
+Example response:
+{
+  "dataset_rows": 200,
+  "caste_seat_before": 0.72,
+  "caste_seat_after": 0.12,
+  "demographic_parity_before": 0.61,
+  "demographic_parity_after": 0.88,
+  "passes_fairness": true
+}
+
+
+#POST /retroactive
+Re-evaluate past decisions
+
+
+#GET /health
+Check if API is running
+
+#Real-World Use Cases
+
+- Hiring platforms → fair resume screening  
+- NBFCs → fair loan approvals  
+- Healthcare → unbiased patient prioritization  
+
+#Setup Instructions
+
+#Backend
+git clone https://github.com/your-repo/nyaya-audit  
+cd nyaya-backend  
+python -m venv env  
+source env/bin/activate  
+pip install -r requirements.txt  
+python main.py  
+
+#Frontend
+cd nyaya_frontend  
+flutter pub get  
+flutter run  
+
+#Impact
+
+- Ensures fair AI decisions  
+- Prevents discrimination  
+- Brings transparency to AI systems  
+
+#References
+
+- SEAT — May et al. (2019)  
+- Hard Debiasing — Bolukbasi et al. (NeurIPS 2016)  
+- IndiBias — NAACL 2024  
+- Nature — January 2026  
+
+#Team
+
+Built for Google Solution Challenge 2026
+
+#Final Thought
+
+AI doesn’t remove bias automatically — it amplifies what already exists.  
+Nyaya ensures it doesn’t.
 
