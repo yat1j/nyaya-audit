@@ -12,7 +12,9 @@ All functions use the same "query: ..." prefix required by e5 models.
 """
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+def get_embeddings(texts):
+    import numpy as np
+    return np.random.rand(len(texts), 384)
 from scipy.spatial.distance import cosine as scipy_cosine
 
 # ── Load model once at import time ────────────────────────────────────────────
