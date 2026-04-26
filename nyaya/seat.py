@@ -1,127 +1,115 @@
 """
 nyaya/seat.py
 
-Sentence Encoder Association Test (SEAT) adapted for Indian caste
-and religion bias detection.
+SEAT (Sentence Encoder Association Test) for Indian caste and religion bias.
 
-Uses intfloat/multilingual-e5-small — 70 MB RAM vs 1.5 GB for e5-large.
-Fits Railway free tier (512 MB RAM limit). d-scores still significant.
+Uses HuggingFace Inference API instead of loading model locally.
+- No model download during build → image stays ~400 MB
+- No RAM pressure → works on Railway free tier (512 MB)
+- Same model quality → e5-large via API, identical embeddings to local
+- Free tier: 30,000 requests/month → enough for demo + judges
 
-Model loaded ONCE at module level — stays in memory between requests.
-All functions use the same "query: ..." prefix required by e5 models.
+Requires env var: HF_API_TOKEN
+Get it free from: huggingface.co → Settings → Access Tokens → New Token (read)
 """
 
+import os
+import time
+import requests
 import numpy as np
-def get_embeddings(texts):
-    import numpy as np
-    return np.random.rand(len(texts), 384)
 from scipy.spatial.distance import cosine as scipy_cosine
 
-# ── Load model once at import time ────────────────────────────────────────────
-# e5-small: ~70 MB on disk, ~200 MB RAM — fits Railway free tier
-# e5-large: ~2.1 GB on disk, ~1.5 GB RAM — crashes Railway free tier
-print("Loading multilingual-e5-small model...")
-from sentence_transformers import SentenceTransformer
-import numpy as np
-from scipy.spatial.distance import cosine
+# ── HuggingFace API config ─────────────────────────────────────────────────────
+HF_TOKEN = os.environ.get("HF_API_TOKEN", "")
 
-# ── Lazy model loading ─────────────────────────────────────────
-# Model loads on FIRST CALL to get_embeddings(), not at import.
-# This prevents Railway startup timeout during deployment.
-# After first load, model stays in memory for all subsequent calls.
-_MODEL = None
-
-def _get_model():
-    global _MODEL
-    if _MODEL is None:
-        print("Loading e5 model (first call)...")
-        _MODEL = SentenceTransformer('intfloat/multilingual-e5-large')
-        print("e5 model loaded.")
-    return _MODEL
-
-
-def get_embeddings(texts: list) -> np.ndarray:
-    model = _get_model()
-    return model.encode(
-        texts,
-        normalize_embeddings=True,
-        batch_size=32,
-        show_progress_bar=False
-    )
-
-
-def cosine_sim(u, v):
-    return 1.0 - cosine(u, v)
-
-
-def seat_score(
-    target_A_names: list,
-    target_B_names: list,
-    attribute_X_words: list,
-    attribute_Y_words: list,
-    template_name: str = "query: A person named {} applied for the job.",
-    template_attr: str = "query: This person is {}."
-) -> dict:
-
-    A_embs = get_embeddings([template_name.format(n) for n in target_A_names])
-    B_embs = get_embeddings([template_name.format(n) for n in target_B_names])
-    X_embs = get_embeddings([template_attr.format(w) for w in attribute_X_words])
-    Y_embs = get_embeddings([template_attr.format(w) for w in attribute_Y_words])
-
-    def assoc(emb):
-        return (np.mean([cosine_sim(emb, x) for x in X_embs]) -
-                np.mean([cosine_sim(emb, y) for y in Y_embs]))
-
-    A_scores = [assoc(a) for a in A_embs]
-    B_scores = [assoc(b) for b in B_embs]
-    all_s    = A_scores + B_scores
-    std      = float(np.std(all_s))
-
-    if std < 1e-10:
-        return {"d_score": 0.0, "interpretation": "No variation",
-                "A_scores": A_scores, "B_scores": B_scores,
-                "mean_A": 0.0, "mean_B": 0.0}
-
-    d   = (np.mean(A_scores) - np.mean(B_scores)) / std
-    lvl = ("No significant bias"          if abs(d) < 0.2 else
-           "Small bias"                   if abs(d) < 0.5 else
-           "MODERATE BIAS — significant"  if abs(d) < 0.8 else
-           "LARGE BIAS — severe")
-
-    return {
-        "d_score":        round(float(d), 4),
-        "mean_A":         round(float(np.mean(A_scores)), 4),
-        "mean_B":         round(float(np.mean(B_scores)), 4),
-        "std":            round(std, 4),
-        "interpretation": lvl,
-        "A_scores":       [round(x, 4) for x in A_scores],
-        "B_scores":       [round(x, 4) for x in B_scores]
-    }
-print("Model loaded.")
+HF_API_URL = (
+    "https://api-inference.huggingface.co"
+    "/pipeline/feature-extraction"
+    "/intfloat/multilingual-e5-large"
+)
 
 
 def get_embeddings(sentences: list) -> np.ndarray:
     """
-    Encode a list of sentences into normalised embeddings.
+    Get normalised embeddings from HuggingFace Inference API.
+
+    Batches requests (max 50 per call — HF API limit).
+    Retries up to 3 times if HF returns 503 "model loading".
+    Normalises all embeddings to unit length (same as normalize_embeddings=True).
 
     Args:
-        sentences: List of strings. Must already include the "query: " prefix
-                   if using e5 models. All callers in this codebase add it.
+        sentences: List of strings. Include "query: " prefix for e5 models.
+                   All callers in this codebase already add the prefix.
 
     Returns:
-        np.ndarray of shape (len(sentences), embedding_dim), normalised.
+        np.ndarray of shape (len(sentences), 1024), normalised.
     """
-    embeddings = _MODEL.encode(
-        sentences,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-        batch_size=32,
-    )
-    return np.array(embeddings)
+    if not HF_TOKEN:
+        raise RuntimeError(
+            "HF_API_TOKEN environment variable is not set. "
+            "Get a free token from huggingface.co → Settings → Access Tokens."
+        )
+
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    batch_size = 50
+    all_embeddings = []
+
+    for i in range(0, len(sentences), batch_size):
+        batch = sentences[i : i + batch_size]
+
+        # Retry loop — HF API returns 503 while model cold-starts (~20 sec)
+        last_error = None
+        for attempt in range(3):
+            try:
+                response = requests.post(
+                    HF_API_URL,
+                    headers=headers,
+                    json={
+                        "inputs": batch,
+                        "options": {"wait_for_model": True},
+                    },
+                    timeout=120,
+                )
+
+                if response.status_code == 200:
+                    batch_embs = np.array(response.json())
+                    all_embeddings.append(batch_embs)
+                    break
+
+                elif response.status_code == 503:
+                    print(
+                        f"  HF model loading (attempt {attempt + 1}/3) "
+                        f"— waiting 20s..."
+                    )
+                    time.sleep(20)
+                    last_error = f"503 model loading after 3 attempts"
+
+                else:
+                    raise RuntimeError(
+                        f"HuggingFace API error {response.status_code}: "
+                        f"{response.text[:200]}"
+                    )
+
+            except requests.Timeout:
+                last_error = f"Request timed out (attempt {attempt + 1}/3)"
+                print(f"  HF API timeout, retrying... ({attempt + 1}/3)")
+                time.sleep(10)
+
+        else:
+            # All 3 attempts failed
+            raise RuntimeError(
+                f"HuggingFace API failed after 3 attempts: {last_error}"
+            )
+
+    embeddings = np.vstack(all_embeddings)
+
+    # Normalise to unit length (same as SentenceTransformer normalize_embeddings=True)
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    norms = np.where(norms < 1e-10, 1.0, norms)
+    return embeddings / norms
 
 
 def _cosine_sim(u: np.ndarray, v: np.ndarray) -> float:
-    """Cosine similarity between two vectors (1 - cosine distance)."""
     return float(1.0 - scipy_cosine(u, v))
 
 
@@ -131,13 +119,9 @@ def _association_score(
     attribute_Y_embs: np.ndarray,
 ) -> float:
     """
-    Compute SEAT association score for one name embedding.
-
-    Association = mean cosine similarity to X attributes
-                - mean cosine similarity to Y attributes
-
-    Positive = name is more associated with X (capability words).
-    Negative = name is more associated with Y (limitation words).
+    SEAT association score for one name embedding.
+    = mean similarity to capability words - mean similarity to limitation words
+    Positive = name clusters nearer capability words (bias against the other group).
     """
     sim_X = float(np.mean([_cosine_sim(name_emb, a) for a in attribute_X_embs]))
     sim_Y = float(np.mean([_cosine_sim(name_emb, a) for a in attribute_Y_embs]))
@@ -151,46 +135,43 @@ def seat_score(
     attribute_Y: list,
 ) -> dict:
     """
-    Run SEAT and return Cohen's d-score measuring bias between two name groups.
+    Run SEAT and return Cohen's d effect size measuring embedding-space bias.
 
     Args:
-        target_A:    List of names for Group A (e.g. brahmin_surnames)
-        target_B:    List of names for Group B (e.g. dalit_obc_surnames)
-        attribute_X: List of positive attribute words (e.g. capability_words)
-        attribute_Y: List of negative attribute words (e.g. limitation_words)
+        target_A:    Group A names (e.g. brahmin_surnames)
+        target_B:    Group B names (e.g. dalit_obc_surnames)
+        attribute_X: Positive attributes (e.g. capability_words)
+        attribute_Y: Negative attributes (e.g. limitation_words)
 
     Returns:
-        dict with keys:
-            d_score         — Cohen's d effect size (float)
-            mean_A          — mean association score for Group A
-            mean_B          — mean association score for Group B
-            interpretation  — "no bias" / "slight" / "moderate" / "significant"
+        dict with d_score, mean_A, mean_B, interpretation
 
-    How it works:
-        1. Encode all names with template "query: A person named {n} applied for the job."
-        2. Encode all attribute words with template "query: This person is {w}."
-        3. For each name compute: mean_sim(capability_words) - mean_sim(limitation_words)
-        4. Cohen's d = (mean(Group_A_scores) - mean(Group_B_scores)) / std(all_scores)
-        A high d-score means Group A names are geometrically closer to capability words
-        in embedding space than Group B names — structural bias.
+    Algorithm:
+        1. Encode names with template "query: A person named {n} applied for the job."
+        2. Encode attributes with template "query: This person is {w}."
+        3. For each name: score = mean_sim(X_words) - mean_sim(Y_words)
+        4. Cohen's d = (mean(A_scores) - mean(B_scores)) / std(all_scores)
+        d > 0.5 = significant bias. d > 0.8 = severe bias.
     """
-    # Build sentences using e5 query template
+    # Build sentences with e5 query template
     A_sents = [f"query: A person named {n} applied for the job." for n in target_A]
     B_sents = [f"query: A person named {n} applied for the job." for n in target_B]
     X_sents = [f"query: This person is {w}." for w in attribute_X]
     Y_sents = [f"query: This person is {w}." for w in attribute_Y]
 
-    # Encode everything
+    print(f"    Encoding {len(A_sents)} Group A, {len(B_sents)} Group B names...")
     A_embs = get_embeddings(A_sents)
     B_embs = get_embeddings(B_sents)
+
+    print(f"    Encoding {len(X_sents)} capability, {len(Y_sents)} limitation words...")
     X_embs = get_embeddings(X_sents)
     Y_embs = get_embeddings(Y_sents)
 
-    # Compute per-name association scores
+    # Per-name association scores
     A_scores = np.array([_association_score(e, X_embs, Y_embs) for e in A_embs])
     B_scores = np.array([_association_score(e, X_embs, Y_embs) for e in B_embs])
 
-    # Cohen's d effect size
+    # Cohen's d
     all_scores = np.concatenate([A_scores, B_scores])
     std_all = float(np.std(all_scores))
 
@@ -199,16 +180,15 @@ def seat_score(
     else:
         d = float((np.mean(A_scores) - np.mean(B_scores)) / std_all)
 
-    # Interpretation thresholds from IndiBias NAACL 2024
     abs_d = abs(d)
     if abs_d < 0.2:
         interp = "no significant bias"
     elif abs_d < 0.5:
         interp = "slight bias"
     elif abs_d < 0.8:
-        interp = "moderate bias"
+        interp = "moderate bias — significant"
     else:
-        interp = "significant bias"
+        interp = "large bias — severe"
 
     return {
         "d_score":        round(d, 4),
