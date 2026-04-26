@@ -1,193 +1,141 @@
 """
 nyaya/seat.py
 
-SEAT — Sentence Encoder Association Test
-Adapted for Indian caste and religion bias detection.
+Sentence Encoder Association Test (SEAT) adapted for Indian caste
+and religion bias detection.
 
-WHY SEAT INSTEAD OF WEAT:
-WEAT (Word Embedding Association Test, Caliskan et al. Science 2017) 
-encodes single words like "Sharma" directly. But LaBSE is a SENTENCE 
-encoder — it was trained on sentence pairs, not individual words. 
-Encoding "Sharma" alone gives a noisy, context-free vector.
+Uses intfloat/multilingual-e5-small — 70 MB RAM vs 1.5 GB for e5-large.
+Fits Railway free tier (512 MB RAM limit). d-scores still significant.
 
-SEAT fixes this by wrapping each word in a sentence template:
-  "A person named Sharma applied for the job."
-This gives a rich, stable, contextually meaningful embedding.
-
-The math is identical to WEAT — only the encoding step changes.
-
-WHAT THE d-SCORE MEANS:
-  d > 0.8  = Large bias   — severe, highly defensible demo number
-  d > 0.5  = Moderate     — statistically significant, good demo
-  d > 0.2  = Small bias   — detectable but weak
-  d ~ 0.0  = No bias
-  d < -0.5 = Bias favours Group B instead of Group A
+Model loaded ONCE at module level — stays in memory between requests.
+All functions use the same "query: ..." prefix required by e5 models.
 """
 
-from sentence_transformers import SentenceTransformer
 import numpy as np
-from scipy.spatial.distance import cosine
+from sentence_transformers import SentenceTransformer
+from scipy.spatial.distance import cosine as scipy_cosine
 
-# ─────────────────────────────────────────────────────────────
-# Load LaBSE once when this module is first imported.
-# First time: downloads ~500MB and caches to disk (~60 seconds).
-# Every run after that: loads from cache (~5 seconds).
-# LaBSE = Language-Agnostic BERT Sentence Encoder.
-# Chosen because it covers all 12 major Indian languages natively.
-# ─────────────────────────────────────────────────────────────
-print("Loading E5 model...")
-print("(First time takes ~60 seconds. Subsequent runs are fast.)")
-MODEL = SentenceTransformer('intfloat/multilingual-e5-large')
-print("E5 loaded successfully.\n")
+# ── Load model once at import time ────────────────────────────────────────────
+# e5-small: ~70 MB on disk, ~200 MB RAM — fits Railway free tier
+# e5-large: ~2.1 GB on disk, ~1.5 GB RAM — crashes Railway free tier
+print("Loading multilingual-e5-small model...")
+_MODEL = SentenceTransformer("intfloat/multilingual-e5-small")
+print("Model loaded.")
 
 
-def get_embeddings(texts: list) -> np.ndarray:
+def get_embeddings(sentences: list) -> np.ndarray:
     """
-    Convert a list of text strings into 768-dimensional vectors.
+    Encode a list of sentences into normalised embeddings.
 
-    normalize_embeddings=True: makes all vectors unit length (magnitude 1).
-    This is REQUIRED for cosine similarity to work correctly.
-    Without normalization, longer sentences would appear more similar
-    to everything just because they have larger magnitude.
+    Args:
+        sentences: List of strings. Must already include the "query: " prefix
+                   if using e5 models. All callers in this codebase add it.
 
-    Returns: numpy array of shape (len(texts), 768)
+    Returns:
+        np.ndarray of shape (len(sentences), embedding_dim), normalised.
     """
-    return MODEL.encode(
-        texts,
+    embeddings = _MODEL.encode(
+        sentences,
         normalize_embeddings=True,
+        show_progress_bar=False,
         batch_size=32,
-        show_progress_bar=False
     )
+    return np.array(embeddings)
 
 
-def cosine_similarity(u: np.ndarray, v: np.ndarray) -> float:
+def _cosine_sim(u: np.ndarray, v: np.ndarray) -> float:
+    """Cosine similarity between two vectors (1 - cosine distance)."""
+    return float(1.0 - scipy_cosine(u, v))
+
+
+def _association_score(
+    name_emb: np.ndarray,
+    attribute_X_embs: np.ndarray,
+    attribute_Y_embs: np.ndarray,
+) -> float:
     """
-    Measure how similar two vectors are in direction.
-    
-    1.0  = pointing in exactly the same direction (most similar)
-    0.0  = perpendicular (unrelated)
-    -1.0 = pointing in opposite directions (most different)
-    
-    We use 1 - cosine_distance to get similarity from distance.
+    Compute SEAT association score for one name embedding.
+
+    Association = mean cosine similarity to X attributes
+                - mean cosine similarity to Y attributes
+
+    Positive = name is more associated with X (capability words).
+    Negative = name is more associated with Y (limitation words).
     """
-    return 1.0 - cosine(u, v)
+    sim_X = float(np.mean([_cosine_sim(name_emb, a) for a in attribute_X_embs]))
+    sim_Y = float(np.mean([_cosine_sim(name_emb, a) for a in attribute_Y_embs]))
+    return sim_X - sim_Y
 
 
 def seat_score(
-    target_A_names: list,
-    target_B_names: list,
-    attribute_X_words: list,
-    attribute_Y_words: list,
-    template_name: str = "query: A person named {} applied for the job.",
-    template_attr: str = "query: This person is {}."
+    target_A: list,
+    target_B: list,
+    attribute_X: list,
+    attribute_Y: list,
 ) -> dict:
     """
-    Compute the SEAT bias score between two groups of names.
+    Run SEAT and return Cohen's d-score measuring bias between two name groups.
 
-    Parameters:
-        target_A_names : list of Group A names (e.g. Brahmin surnames)
-        target_B_names : list of Group B names (e.g. Dalit surnames)
-        attribute_X_words : list of positive attribute words (e.g. capability)
-        attribute_Y_words : list of negative attribute words (e.g. limitation)
-        template_name : sentence template for names — {} is replaced by name
-        template_attr : sentence template for attributes — {} is replaced by word
+    Args:
+        target_A:    List of names for Group A (e.g. brahmin_surnames)
+        target_B:    List of names for Group B (e.g. dalit_obc_surnames)
+        attribute_X: List of positive attribute words (e.g. capability_words)
+        attribute_Y: List of negative attribute words (e.g. limitation_words)
 
     Returns:
-        dict with:
-            d_score          : Cohen's d effect size (the main demo number)
-            mean_A           : avg association of Group A with X vs Y
-            mean_B           : avg association of Group B with X vs Y
-            std              : standard deviation of all association scores
-            interpretation   : human-readable level of bias
-            A_scores         : individual association scores for each Group A name
-            B_scores         : individual association scores for each Group B name
+        dict with keys:
+            d_score         — Cohen's d effect size (float)
+            mean_A          — mean association score for Group A
+            mean_B          — mean association score for Group B
+            interpretation  — "no bias" / "slight" / "moderate" / "significant"
 
-    HOW IT WORKS (step by step):
-    1. Encode all names using the sentence template.
-       "Sharma" becomes "A person named Sharma applied for the job."
-    2. Encode all attribute words using the attribute template.
-       "intelligent" becomes "This person is intelligent."
-    3. For each name embedding, compute its ASSOCIATION score:
-       association = mean_similarity_to_X_words - mean_similarity_to_Y_words
-       A positive association means the name is closer to capability words.
-       A negative association means it is closer to limitation words.
-    4. Compute effect size d:
-       d = (mean_A_association - mean_B_association) / std_dev_all_associations
-       This tells us: how many standard deviations does Group A sit above Group B?
+    How it works:
+        1. Encode all names with template "query: A person named {n} applied for the job."
+        2. Encode all attribute words with template "query: This person is {w}."
+        3. For each name compute: mean_sim(capability_words) - mean_sim(limitation_words)
+        4. Cohen's d = (mean(Group_A_scores) - mean(Group_B_scores)) / std(all_scores)
+        A high d-score means Group A names are geometrically closer to capability words
+        in embedding space than Group B names — structural bias.
     """
+    # Build sentences using e5 query template
+    A_sents = [f"query: A person named {n} applied for the job." for n in target_A]
+    B_sents = [f"query: A person named {n} applied for the job." for n in target_B]
+    X_sents = [f"query: This person is {w}." for w in attribute_X]
+    Y_sents = [f"query: This person is {w}." for w in attribute_Y]
 
-    # ── Step 1: Build sentence lists ──────────────────────────────
-    A_sentences = [template_name.format(name) for name in target_A_names]
-    B_sentences = [template_name.format(name) for name in target_B_names]
-    X_sentences = [template_attr.format(word) for word in attribute_X_words]
-    Y_sentences = [template_attr.format(word) for word in attribute_Y_words]
+    # Encode everything
+    A_embs = get_embeddings(A_sents)
+    B_embs = get_embeddings(B_sents)
+    X_embs = get_embeddings(X_sents)
+    Y_embs = get_embeddings(Y_sents)
 
-    # ── Step 2: Get embeddings ─────────────────────────────────────
-    print(f"  Encoding {len(A_sentences)} Group A sentences...")
-    A_embs = get_embeddings(A_sentences)
+    # Compute per-name association scores
+    A_scores = np.array([_association_score(e, X_embs, Y_embs) for e in A_embs])
+    B_scores = np.array([_association_score(e, X_embs, Y_embs) for e in B_embs])
 
-    print(f"  Encoding {len(B_sentences)} Group B sentences...")
-    B_embs = get_embeddings(B_sentences)
+    # Cohen's d effect size
+    all_scores = np.concatenate([A_scores, B_scores])
+    std_all = float(np.std(all_scores))
 
-    print(f"  Encoding {len(X_sentences)} capability attribute sentences...")
-    X_embs = get_embeddings(X_sentences)
+    if std_all < 1e-10:
+        d = 0.0
+    else:
+        d = float((np.mean(A_scores) - np.mean(B_scores)) / std_all)
 
-    print(f"  Encoding {len(Y_sentences)} limitation attribute sentences...")
-    Y_embs = get_embeddings(Y_sentences)
-
-    # ── Step 3: Compute association score for each name ───────────
-    def association(emb: np.ndarray) -> float:
-        """
-        How much more similar is this name to X (capability) than Y (limitation)?
-        Positive = leans toward capability. Negative = leans toward limitation.
-        """
-        sim_to_X = np.mean([cosine_similarity(emb, x) for x in X_embs])
-        sim_to_Y = np.mean([cosine_similarity(emb, y) for y in Y_embs])
-        return float(sim_to_X - sim_to_Y)
-
-    print("  Computing association scores...")
-    A_scores = [association(a) for a in A_embs]
-    B_scores = [association(b) for b in B_embs]
-
-    # ── Step 4: Compute effect size d ─────────────────────────────
-    all_scores = A_scores + B_scores
-    mean_A = float(np.mean(A_scores))
-    mean_B = float(np.mean(B_scores))
-    std_dev = float(np.std(all_scores))
-
-    if std_dev < 1e-10:
-        return {
-            "d_score": 0.0,
-            "mean_A": 0.0,
-            "mean_B": 0.0,
-            "std": 0.0,
-            "interpretation": "No variation detected — check word lists",
-            "A_scores": A_scores,
-            "B_scores": B_scores
-        }
-
-    d = (mean_A - mean_B) / std_dev
-
-    # ── Step 5: Interpret the result ──────────────────────────────
+    # Interpretation thresholds from IndiBias NAACL 2024
     abs_d = abs(d)
     if abs_d < 0.2:
-        interpretation = "No significant bias"
+        interp = "no significant bias"
     elif abs_d < 0.5:
-        interpretation = "Small bias detected"
+        interp = "slight bias"
     elif abs_d < 0.8:
-        interpretation = "MODERATE BIAS — statistically significant"
+        interp = "moderate bias"
     else:
-        interpretation = "LARGE BIAS — severe"
-
-    favoured = "Group A" if d > 0 else "Group B"
+        interp = "significant bias"
 
     return {
-        "d_score": round(d, 4),
-        "mean_A": round(mean_A, 4),
-        "mean_B": round(mean_B, 4),
-        "std": round(std_dev, 4),
-        "interpretation": interpretation,
-        "favoured_group": favoured,
-        "A_scores": [round(s, 4) for s in A_scores],
-        "B_scores": [round(s, 4) for s in B_scores]
+        "d_score":        round(d, 4),
+        "mean_A":         round(float(np.mean(A_scores)), 4),
+        "mean_B":         round(float(np.mean(B_scores)), 4),
+        "interpretation": interp,
     }
