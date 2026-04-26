@@ -21,7 +21,82 @@ from scipy.spatial.distance import cosine as scipy_cosine
 # e5-small: ~70 MB on disk, ~200 MB RAM — fits Railway free tier
 # e5-large: ~2.1 GB on disk, ~1.5 GB RAM — crashes Railway free tier
 print("Loading multilingual-e5-small model...")
-_MODEL = SentenceTransformer("intfloat/multilingual-e5-small")
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from scipy.spatial.distance import cosine
+
+# ── Lazy model loading ─────────────────────────────────────────
+# Model loads on FIRST CALL to get_embeddings(), not at import.
+# This prevents Railway startup timeout during deployment.
+# After first load, model stays in memory for all subsequent calls.
+_MODEL = None
+
+def _get_model():
+    global _MODEL
+    if _MODEL is None:
+        print("Loading e5 model (first call)...")
+        _MODEL = SentenceTransformer('intfloat/multilingual-e5-large')
+        print("e5 model loaded.")
+    return _MODEL
+
+
+def get_embeddings(texts: list) -> np.ndarray:
+    model = _get_model()
+    return model.encode(
+        texts,
+        normalize_embeddings=True,
+        batch_size=32,
+        show_progress_bar=False
+    )
+
+
+def cosine_sim(u, v):
+    return 1.0 - cosine(u, v)
+
+
+def seat_score(
+    target_A_names: list,
+    target_B_names: list,
+    attribute_X_words: list,
+    attribute_Y_words: list,
+    template_name: str = "query: A person named {} applied for the job.",
+    template_attr: str = "query: This person is {}."
+) -> dict:
+
+    A_embs = get_embeddings([template_name.format(n) for n in target_A_names])
+    B_embs = get_embeddings([template_name.format(n) for n in target_B_names])
+    X_embs = get_embeddings([template_attr.format(w) for w in attribute_X_words])
+    Y_embs = get_embeddings([template_attr.format(w) for w in attribute_Y_words])
+
+    def assoc(emb):
+        return (np.mean([cosine_sim(emb, x) for x in X_embs]) -
+                np.mean([cosine_sim(emb, y) for y in Y_embs]))
+
+    A_scores = [assoc(a) for a in A_embs]
+    B_scores = [assoc(b) for b in B_embs]
+    all_s    = A_scores + B_scores
+    std      = float(np.std(all_s))
+
+    if std < 1e-10:
+        return {"d_score": 0.0, "interpretation": "No variation",
+                "A_scores": A_scores, "B_scores": B_scores,
+                "mean_A": 0.0, "mean_B": 0.0}
+
+    d   = (np.mean(A_scores) - np.mean(B_scores)) / std
+    lvl = ("No significant bias"          if abs(d) < 0.2 else
+           "Small bias"                   if abs(d) < 0.5 else
+           "MODERATE BIAS — significant"  if abs(d) < 0.8 else
+           "LARGE BIAS — severe")
+
+    return {
+        "d_score":        round(float(d), 4),
+        "mean_A":         round(float(np.mean(A_scores)), 4),
+        "mean_B":         round(float(np.mean(B_scores)), 4),
+        "std":            round(std, 4),
+        "interpretation": lvl,
+        "A_scores":       [round(x, 4) for x in A_scores],
+        "B_scores":       [round(x, 4) for x in B_scores]
+    }
 print("Model loaded.")
 
 
