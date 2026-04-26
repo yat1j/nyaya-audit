@@ -24,8 +24,7 @@ HF_TOKEN = os.environ.get("HF_API_TOKEN", "")
 
 HF_API_URL = (
     "https://api-inference.huggingface.co"
-    "/pipeline/feature-extraction"
-    "/intfloat/multilingual-e5-large"
+    "/models/intfloat/multilingual-e5-large"
 )
 
 
