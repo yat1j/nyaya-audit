@@ -4,7 +4,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
 ![Flutter](https://img.shields.io/badge/Flutter-Frontend-blue)
 ![Firebase](https://img.shields.io/badge/Firebase-Hosting%20%7C%20Firestore-orange)
-![Railway](https://img.shields.io/badge/Railway-Backend%20Deployment-purple)
+![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Backend%20Deployment-yellow)
 
 ---
 
@@ -71,7 +71,7 @@ Re-evaluates every past decision under the debiased model and flags outcomes tha
 
 | Component | Technology |
 |---|---|
-| Backend API | FastAPI (Python), deployed on Railway.app |
+| Backend API | FastAPI (Python), deployed on Hugging Face Spaces |
 | Frontend | Flutter Web App |
 | Hosting | Firebase Hosting |
 | Database | Firebase Firestore (real-time sync) |
@@ -141,18 +141,13 @@ Run locally:
 python main.py
 ```
 
-### Backend (Deploy to Railway)
+### Backend (Deployed on Hugging Face Spaces)
 
-1. Go to [railway.app](https://railway.app) and sign in with GitHub
-2. Click **New Project → Deploy from GitHub repo**
-3. Select the `nyaya-audit` repo and the `backend` branch
-4. Railway detects the Dockerfile automatically
-5. Add environment variable: `GEMINI_API_KEY = your_key`
-6. Click Deploy — Railway gives you a live HTTPS URL
+Live API URL: `https://yatj-nyaya-api.hf.space`
 
 Test it:
 ```bash
-curl https://your-railway-url.up.railway.app/health
+curl https://yatj-nyaya-api.hf.space/health
 ```
 
 ### Frontend
@@ -163,7 +158,7 @@ flutter pub get
 flutter run -d chrome
 ```
 
-Update `RAILWAY_URL` in `upload_screen.dart` with your Railway backend URL before running.
+Update `HF_URL` in `upload_screen.dart` with `https://yatj-nyaya-api.hf.space` before running.
 
 ### Deploy Frontend to Firebase Hosting
 
