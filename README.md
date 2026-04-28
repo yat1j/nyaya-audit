@@ -1,23 +1,200 @@
-# Nyaya — AI Bias Detection System
+# Nyaya — AI Fairness Infrastructure for India
 
-## Overview
-Nyaya detects bias in embedding models using SEAT (Sentence Encoder Association Test).
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
+![Flutter](https://img.shields.io/badge/Flutter-Frontend-blue)
+![Firebase](https://img.shields.io/badge/Firebase-Hosting%20%7C%20Firestore-orange)
+![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Backend%20Deployment-yellow)
 
-## What we built (Day 1)
-- Implemented SEAT algorithm
-- Measured bias in embeddings
-- Generated d-scores for analysis
+---
 
-## Results
-- Caste bias d-score: 0.8203 (large)
-- Religion bias d-score: 0.3015 (small)
+## One-Line Description
 
-## How it works
-1. Convert text to embeddings
-2. Compute similarity between groups and attributes
-3. Calculate bias score (d-score)
+Nyaya is an AI fairness platform that detects and removes hidden caste and religion bias from machine learning models used in India.
 
-## How to run
+---
+
+## The Problem
+
+Modern AI systems used in:
+- Hiring platforms
+- NBFC loan approvals
+- Hospital triage systems
+
+...are trained on embedding models like IndicBERT, E5, and mBERT.
+
+These models encode social bias geometrically.
+
+**Example:**
+- Names like *Sharma* are closer to "intelligent" in embedding space
+- Names like *Paswan* are closer to "unskilled"
+
+Even if developers never write biased rules, the model still behaves unfairly.
+
+---
+
+## Evidence
+
+- **IndiBias (NAACL 2024)** → Indian language models show measurable caste bias
+- **DeCaste (arXiv 2025)** → Bias persists across datasets and model sizes
+- **Nature (January 2026)** → Structural bias confirmed in multilingual embeddings
+
+---
+
+## Why Existing Tools Fail
+
+Current fairness tools:
+- Require explicit protected labels (not available in India)
+- Do not support caste proxies like surnames
+- Cannot detect embedding-level geometric bias
+
+**Result:** Bias remains invisible — and keeps making decisions.
+
+---
+
+## Our Solution — Nyaya
+
+Nyaya solves this using three research-backed methods:
+
+**1. SEAT (Bias Detection)**
+Measures caste and religion bias using the Sentence Encoder Association Test — peer-reviewed methodology from May et al. (2019).
+
+**2. Subspace Projection Debiasing**
+Removes the bias direction mathematically across 20 embedding dimensions using PCA projection — no accuracy tradeoff.
+
+**3. Retroactive Audit**
+Re-evaluates every past decision under the debiased model and flags outcomes that would have changed.
+
+---
+
+## Architecture
+
+| Component | Technology |
+|---|---|
+| Backend API | FastAPI (Python), deployed on Hugging Face Spaces |
+| Frontend | Flutter Web App |
+| Hosting | Firebase Hosting |
+| Database | Firebase Firestore (real-time sync) |
+| File Storage | Firebase Storage |
+| AI Explanation | Gemini API (Google AI Studio) |
+| Embedding Model | e5-large (sentence-transformers) |
+
+**Data Flow:**
+---
+
+## Real Results
+
+Tested on 200 identical resumes with different names (Brahmin vs Dalit groups):
+
+| Metric | Before | After |
+|---|---|---|
+| Brahmin shortlist rate | 68.3% | 65.0% |
+| Dalit shortlist rate | 46.7% | 55.0% |
+| Demographic parity | 0.6829 ❌ | 0.8462 ✅ |
+| Passes fairness (≥ 0.80) | No | Yes |
+| Decisions changed | — | 46 of 200 |
+| Dalit candidates newly shortlisted | — | 11 |
+
+---
+
+## API Endpoints
+
+### POST /audit
+Upload dataset and get bias metrics.
+
+**Example response:**
+```json
+{
+  "dataset_rows": 200,
+  "caste_seat_before": 0.009965,
+  "caste_seat_after": 0.008866,
+  "demographic_parity_before": 0.6829,
+  "demographic_parity_after": 0.8462,
+  "passes_fairness": true,
+  "gemini_explanation": "..."
+}
+```
+
+### POST /retroactive
+Re-evaluate past decisions under the debiased model.
+
+### GET /health
+Check if the API is running.
+
+---
+
+## Setup Instructions
+
+### Backend (Local)
+
 ```bash
-pip install sentence-transformers numpy scipy scikit-learn
-python run_seat.py
+git clone https://github.com/yat1j/nyaya-audit
+cd nyaya-backend
+python -m venv env
+source env/bin/activate
+pip install -r requirements.txt
+```
+
+Create a `.env` file:
+Run locally:
+```bash
+python main.py
+```
+
+### Backend (Deployed on Hugging Face Spaces)
+
+Live API URL: `https://yatj-nyaya-api.hf.space`
+
+Test it:
+```bash
+curl https://yatj-nyaya-api.hf.space/health
+```
+
+### Frontend
+
+```bash
+cd nyaya_frontend
+flutter pub get
+flutter run -d chrome
+```
+
+Update `HF_URL` in `upload_screen.dart` with `https://yatj-nyaya-api.hf.space` before running.
+
+### Deploy Frontend to Firebase Hosting
+
+```bash
+flutter build web --release
+firebase deploy --only hosting
+```
+
+---
+
+## Real-World Use Cases
+
+- **Hiring platforms** → fair resume screening across caste groups
+- **NBFCs** → unbiased loan approvals
+- **Healthcare** → equitable patient prioritisation
+
+---
+
+## References
+
+- SEAT — May et al. (2019)
+- Hard Debiasing — Bolukbasi et al. (NeurIPS 2016)
+- IndiBias — NAACL 2024
+- DeCaste — arXiv 2025
+- Nature — January 2026
+
+---
+
+## Team
+
+**Team Nyaya** — Built for Google Solution Challenge 2026  
+**Team Leader:** Yatin Arora
+
+---
+
+## Final Thought
+
+> AI doesn't remove bias automatically — it amplifies what already exists.  
+> Nyaya ensures it doesn't.
