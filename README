@@ -1,0 +1,129 @@
+# Nyaya — Infrastructure
+
+Firebase + Python bridge for the [Nyaya](https://yatj-nyaya-api.hf.space) AI fairness audit platform.  
+Google Solution Challenge 2026.
+
+---
+
+## What This Repo Does
+
+This is the infrastructure layer that connects Nyaya's HuggingFace backend to Firebase Firestore, so the Flutter app can stream live audit results.
+
+**Flow:**
+---
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `write_test_doc.py` | Run once to seed a test Firestore document (`audit_jobs/test-001`) with realistic fake data. Lets Member B test their Results screen before full integration. |
+| `write_to_firestore.py` | Main bridge script. Calls `/audit` then `/retroactive` on the HF API, writes all results to Firestore. Use as fallback if Flutter's direct API call has issues. |
+| `data/demo_dataset.csv` | 200-row synthetic Indian hiring dataset with caste/religion labels. Used for all integration tests. |
+| `serviceAccountKey.json` | **NOT committed.** Get from Firebase Console → Project Settings → Service Accounts → Generate New Private Key. |
+
+---
+
+## Setup
+
+```bash
+pip install firebase-admin requests
+```
+
+Place `serviceAccountKey.json` in the repo root (do not commit it — it's in `.gitignore`).
+
+---
+
+## Usage
+
+**Seed a test document (run once, for Member B's testing):**
+```bash
+python write_test_doc.py
+# → writes audit_jobs/test-001 to Firestore
+# → tell Member B to use jobId "test-001"
+```
+
+**Run a real audit job:**
+```bash
+python write_to_firestore.py data/demo_dataset.csv my-job-id-001
+# → calls HF API /audit + /retroactive
+# → writes results to Firestore audit_jobs/my-job-id-001
+# → tell Member B to use this jobId
+```
+
+Takes 5–10 minutes. Watch terminal output for progress.
+
+---
+
+## Firestore Schema
+
+**`audit_jobs/{jobId}`**
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | string | `running` → `audit_complete` → `complete` (or `error`) |
+| `model_name` | string | Name of the model being audited |
+| `caste_seat_before` / `caste_seat_after` | float | SEAT d-score before/after debiasing |
+| `religion_seat_before` / `religion_seat_after` | float | Religion bias d-score |
+| `demographic_parity_before` / `demographic_parity_after` | float | Shortlist rate ratio across groups |
+| `passes_fairness` | bool | True if model passes 80/20 fairness rule after debiasing |
+| `shortlist_rates_before` / `shortlist_rates_after` | map | Per-group shortlist % e.g. `{brahmin: 72.0, dalit: 29.0}` |
+| `gemini_explanation` | string | Gemini-generated plain-English explanation of results |
+| `dataset_rows` | int | Number of rows in uploaded CSV |
+| `created_at` / `completed_at` | timestamp | Job lifecycle timestamps |
+
+**`audit_jobs/{jobId}/retroactive_results/{id}`** — one document per applicant with their individual before/after outcome.
+
+---
+
+## Firestore Rules (Hackathon)
+
+Open rules are set for the duration of the hackathon:
+
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+---
+
+## Backend API
+
+Live at: **https://yatj-nyaya-api.hf.space**
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/health` | GET | Wake check — always call this 5 min before a demo |
+| `/audit` | POST | Upload CSV, returns SEAT d-scores + Gemini explanation |
+| `/retroactive` | POST | Upload CSV, returns per-applicant before/after decisions |
+
+> ⚠️ HF Spaces free tier sleeps after 48 hours. Run `curl https://yatj-nyaya-api.hf.space/health` before every demo/integration test.
+
+---
+
+## Integration Test
+
+```bash
+python write_to_firestore.py data/demo_dataset.csv integration-test-001
+```
+
+Then open Firebase Console → Firestore → `audit_jobs/integration-test-001`.  
+Status should reach `complete` with all metric fields populated within 8 minutes.  
+Share the jobId with Member B to verify their Results screen.
+
+---
+
+## Team
+
+| Member | Role |
+|---|---|
+| A | Backend — SEAT, Hard Debiasing, HuggingFace API |
+| B | Frontend — Flutter web app, Firebase Hosting |
+| C | Infra — Firebase, Firestore, this repo |
+| D | Dataset, README, PPT, Demo |
+
