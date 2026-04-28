@@ -1,23 +1,20 @@
-# Nyaya — AI Bias Detection System
+# Nyaya — Backend
 
-## Overview
-Nyaya detects bias in embedding models using SEAT (Sentence Encoder Association Test).
+This is the FastAPI backend for Nyaya. It does three things:
 
-## What we built (Day 1)
-- Implemented SEAT algorithm
-- Measured bias in embeddings
-- Generated d-scores for analysis
+1. **Detects bias** — Takes a CSV of hiring decisions and runs SEAT (Sentence Encoder Association Test) to measure caste and religion bias in the embedding model. Outputs a d-score for each group.
 
-## Results
-- Caste bias d-score: 0.8203 (large)
-- Religion bias d-score: 0.3015 (small)
+2. **Removes bias** — Applies subspace projection debiasing across 20 embedding dimensions. Identifies the bias direction mathematically and removes it without affecting other semantic content.
 
-## How it works
-1. Convert text to embeddings
-2. Compute similarity between groups and attributes
-3. Calculate bias score (d-score)
+3. **Retroactive audit** — Replays every past decision under the debiased model. Reports which outcomes changed and which candidates would have been shortlisted under a fair model.
 
-## How to run
-```bash
-pip install sentence-transformers numpy scipy scikit-learn
-python run_seat.py
+4. **Explains in plain English** — Calls Gemini API to generate a 3-sentence natural language summary of the bias findings.
+
+**Live API:** https://yatj-nyaya-api.hf.space
+
+**Endpoints:**
+- `POST /audit` — Upload CSV, get bias metrics
+- `POST /retroactive` — Get per-decision audit results  
+- `GET /health` — Check if API is running
+
+**Built with:** Python, FastAPI, e5-large (sentence-transformers), Gemini API, Firebase Firestore
