@@ -1,146 +1,20 @@
-# Nyaya — Backend API
+# Nyaya — Backend
 
-## Overview
-FastAPI backend for Nyaya's AI bias detection and debiasing platform. Deployed on Hugging Face Spaces.
+This is the FastAPI backend for Nyaya. It does three things:
+
+1. **Detects bias** — Takes a CSV of hiring decisions and runs SEAT (Sentence Encoder Association Test) to measure caste and religion bias in the embedding model. Outputs a d-score for each group.
+
+2. **Removes bias** — Applies subspace projection debiasing across 20 embedding dimensions. Identifies the bias direction mathematically and removes it without affecting other semantic content.
+
+3. **Retroactive audit** — Replays every past decision under the debiased model. Reports which outcomes changed and which candidates would have been shortlisted under a fair model.
+
+4. **Explains in plain English** — Calls Gemini API to generate a 3-sentence natural language summary of the bias findings.
 
 **Live API:** https://yatj-nyaya-api.hf.space
 
----
+**Endpoints:**
+- `POST /audit` — Upload CSV, get bias metrics
+- `POST /retroactive` — Get per-decision audit results  
+- `GET /health` — Check if API is running
 
-## What We Built
-
-### Day 1 — SEAT Bias Detection
-- Implemented SEAT (Sentence Encoder Association Test) for measuring caste and religion bias in embedding models
-- Integrated e5-large embedding model via sentence-transformers
-- Built bias scoring pipeline comparing Brahmin and Dalit name groups against capability word sets
-- Reproduced caste bias d-score results from IndiBias NAACL 2024 — confirming our methodology
-
-### Day 2 — Debiasing & Retroactive Audit
-- Implemented subspace projection debiasing across 20 embedding dimensions using PCA
-- Built retroactive audit engine that replays every past decision under the debiased model and flags outcomes that changed
-- Integrated Gemini API for plain-English bias explanation generation
-- Added t-SNE export endpoint for visualising embedding clusters before and after debiasing
-
-### Day 3 — Gemma Bias Test
-- Ran bias test on Google's Gemma model using hiring prompts with different name groups
-- Confirmed that even Gemma completes hiring prompts differently for Brahmin vs Dalit names
-- Results back up IndiBias NAACL 2024 and DeCaste arXiv 2025 findings
-
-### Day 4 — API & Deployment
-- Built and finalised FastAPI endpoints: /audit, /retroactive, /health
-- Dockerised the application for deployment
-- Deployed to Hugging Face Spaces
-- Connected to Firebase Firestore for real-time results sync with Flutter frontend
-
----
-
-## API Endpoints
-
-### POST /audit
-Upload CSV dataset and get bias metrics.
-
-**Example response:**
-```json
-{
-  "dataset_rows": 200,
-  "caste_seat_before": 0.009965,
-  "caste_seat_after": 0.008866,
-  "demographic_parity_before": 0.6829,
-  "demographic_parity_after": 0.8462,
-  "passes_fairness": true,
-  "gemini_explanation": "..."
-}
-```
-
-### POST /retroactive
-Re-evaluate past decisions under the debiased model.
-
-**Example response:**
-```json
-{
-  "outcomes_changed": 46,
-  "newly_shortlisted": 11,
-  "per_decision": [...]
-}
-```
-
-### GET /health
-Check if the API is running.
-
----
-
-## Real Results
-
-Tested on 200 identical resumes with different names (Brahmin vs Dalit groups):
-
-| Metric | Before | After |
-|---|---|---|
-| Brahmin shortlist rate | 68.3% | 65.0% |
-| Dalit shortlist rate | 46.7% | 55.0% |
-| Demographic parity | 0.6829 ❌ | 0.8462 ✅ |
-| Passes fairness (≥ 0.80) | No | Yes |
-| Decisions changed | — | 46 of 200 |
-| Dalit candidates newly shortlisted | — | 11 |
-
----
-
-## Setup (Local)
-
-```bash
-git clone https://github.com/yat1j/nyaya-audit
-cd nyaya-backend
-python -m venv env
-source env/bin/activate
-pip install -r requirements.txt
-```
-
-Create a `.env` file:
-```
-GEMINI_API_KEY=your_key_from_aistudio.google.com
-```
-
-Run locally:
-```bash
-python main.py
-```
-
----
-
-## Deployment (Hugging Face Spaces)
-
-1. Go to [huggingface.co](https://huggingface.co) and create a new Space
-2. Select **Docker** as the SDK
-3. Push the backend code to the Space repository
-4. Add environment variable: `GEMINI_API_KEY = your_key`
-5. Hugging Face builds and deploys automatically
-
-Live API URL: `https://yatj-nyaya-api.hf.space`
-
-Test it:
-```bash
-curl https://yatj-nyaya-api.hf.space/health
-```
-
----
-
-## Tech Stack
-
-| Technology | Purpose |
-|---|---|
-| Python 3.11 | Core language |
-| FastAPI | REST API framework |
-| e5-large (sentence-transformers) | Embedding model for SEAT |
-| Gemini API (Google AI Studio) | Bias explanation generation |
-| Firebase Firestore | Real-time results sync with frontend |
-| Docker | Containerisation for deployment |
-| Hugging Face Spaces | Cloud deployment |
-
----
-
-## Research Backing
-
-- SEAT — May et al. (2019)
-- Hard Debiasing — Bolukbasi et al. (NeurIPS 2016)
-- IndiBias — NAACL 2024
-- DeCaste — arXiv 2025
-- Nature — January 2026
+**Built with:** Python, FastAPI, e5-large (sentence-transformers), Gemini API, Firebase Firestore
