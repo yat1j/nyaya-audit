@@ -53,9 +53,9 @@ class DefaultFirebaseOptions {
     apiKey: 'AIzaSyBI78Pkc9Ug4yikYrDXM3sYMxeFjs0jgps',
     appId: '1:449275393347:web:907c7bf21ab8e671046bf6',
     messagingSenderId: '449275393347',
-    projectId: 'nyaya-audit',
+    projectId: 'nyaya-audit-493306-b7e10',
     authDomain: 'nyaya-audit.firebaseapp.com',
-    storageBucket: 'nyaya-audit.firebasestorage.app',
+    storageBucket: 'nyaya-audit-493306-b7e10.firebasestorage.app',
     measurementId: 'G-YYHQNBRNP1',
   );
 
@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     apiKey: 'AIzaSyDUAUq7qpI_g8clUIS2f4cjZqclm5HNVJY',
     appId: '1:449275393347:android:86cc2d3e545ce50e046bf6',
     messagingSenderId: '449275393347',
-    projectId: 'nyaya-audit',
-    storageBucket: 'nyaya-audit.firebasestorage.app',
+    projectId: 'nyaya-audit-493306-b7e10',
+    storageBucket: 'nyaya-audit-493306-b7e10.firebasestorage.app',
   );
 }
